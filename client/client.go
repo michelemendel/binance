@@ -38,25 +38,29 @@ func NewClient(env string, conn *binance_connector.Client, apiKey, secretKey, ba
 
 // https://binance-docs.github.io/apidocs/spot/en/#new-order-trade
 // symbol-BTCFDUSD, type-MARKET, quantity-0.001, orderType-Market
-func (c Client) Buy(pair string, quoteOrderQuantity, quantity float64, orderType string) float64 {
-	order, err := c.Order("BUY", pair, quoteOrderQuantity, quantity, orderType)
+func (c Client) Buy(pair string, quoteOrderQuantity, quantity float64) (float64, error) {
+	order, err := c.Order("BUY", pair, quoteOrderQuantity, quantity)
 	if err != nil {
 		fmt.Println(err)
-		return 0
+		return 0, err
 	}
-	return String2Float(order.ExecutedQty)
+	qty := util.String2Float(order.ExecutedQty)
+	return qty, nil
 }
 
-func (c Client) Sell(pair string, quoteOrderQuantity, quantity float64, orderType string) (float64, float64) {
-	order, err := c.Order("SELL", pair, quoteOrderQuantity, quantity, orderType)
+func (c Client) Sell(pair string, quoteOrderQuantity, quantity float64) (float64, float64) {
+	order, err := c.Order("SELL", pair, quoteOrderQuantity, quantity)
 	if err != nil {
 		fmt.Println(err)
 		return 0, 0
 	}
-	return String2Float(order.ExecutedQty) * String2Float(order.Fills[0].Price), String2Float(order.Fills[0].Commission)
+	return util.String2Float(order.ExecutedQty) * util.String2Float(order.Fills[0].Price), util.String2Float(order.Fills[0].Commission)
 }
 
-func (c Client) Order(side, pair string, quoteOrderQuantity, quantity float64, orderType string) (*binance_connector.CreateOrderResponseFULL, error) {
+func (c Client) Order(side, pair string, quoteOrderQuantity, quantity float64) (*binance_connector.CreateOrderResponseFULL, error) {
+	fmt.Printf("side:%s, pair:%s, quoteOrderQuantity:%v, quantity:%v\n", side, pair, quoteOrderQuantity, quantity)
+
+	orderType := "MARKET"
 	newOrder := c.Conn.
 		NewCreateOrderService().
 		Symbol(pair).
@@ -73,7 +77,7 @@ func (c Client) Order(side, pair string, quoteOrderQuantity, quantity float64, o
 
 	resp, err := newOrder.Do(context.Background())
 	if err != nil {
-		return nil, fmt.Errorf("error creating order")
+		return nil, fmt.Errorf("error creating order: %v", err)
 	}
 
 	order := resp.(*binance_connector.CreateOrderResponseFULL)

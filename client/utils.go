@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
-	"strconv"
 
 	"github.com/michelemendel/binance/util"
 )
@@ -125,13 +124,4 @@ func decode(resp []uint8, respInstance any) error {
 		return err
 	}
 	return nil
-}
-
-func String2Float(s string) float64 {
-	f, err := strconv.ParseFloat(s, 64)
-	if err != nil {
-		slog.Error("error converting string to float", "error", err)
-		return 0
-	}
-	return f
 }

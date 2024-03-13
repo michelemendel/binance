@@ -47,12 +47,21 @@ func main() {
 
 	fmt.Printf("env:%s\nbaseAPI:%s\nbaseWS:%s\n", client.Env, client.BaseAPI, client.BaseWS)
 
-	// client.SymbolPriceTicker("BTCFDUSD")
-	quoteAssetAmount := 100.0
+	// Buy
+	// quoteAssetAmount := 100.0
 	symbol := "BTCFDUSD"
-	qty := client.Buy(symbol, quoteAssetAmount, 0, "MARKET")
-	fmt.Printf("You bought %s for %v, and got amount:%v\n", symbol, quoteAssetAmount, qty)
-	total, commission := client.Sell(symbol, 0, qty, "MARKET")
+	// client.Buy(symbol, quoteAssetAmount, 0, "MARKET")
+	// order, err := client.Buy(symbol, quoteAssetAmount, 0)
+	// if err != nil {
+	// fmt.Println(err)
+	// return
+	// }
+	// qty := util.String2Float(order.ExecutedQty)
+	// fmt.Printf("You bought %s for %v, and got amount:%v\n", symbol, quoteAssetAmount, qty)
+
+	// Sell
+	qty := 0.001
+	total, commission := client.Sell(symbol, 0, qty)
 	fmt.Printf("You sold %s, amount:%v, commission:%v\n", symbol, total, commission)
 
 	// client.ExchangeInfo("BTCFDUSD")
