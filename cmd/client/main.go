@@ -10,6 +10,7 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/michelemendel/binance/client"
 	c "github.com/michelemendel/binance/constant"
+	"github.com/michelemendel/binance/util"
 )
 
 // https://github.com/binance/binance-connector-go
@@ -41,30 +42,44 @@ func main() {
 		secretKey = os.Getenv("SECRET_KEY")
 	}
 
-	fmt.Println("baseAPI:", baseAPI)
 	conn := binance_connector.NewClient(apiKey, secretKey, baseAPI)
 	client := client.NewClient(env, conn, apiKey, secretKey, baseAPI, baseWS)
-
+	client.Ping()
 	fmt.Printf("env:%s\nbaseAPI:%s\nbaseWS:%s\n", client.Env, client.BaseAPI, client.BaseWS)
 
-	// Buy
-	// quoteAssetAmount := 100.0
-	symbol := "BTCFDUSD"
-	// client.Buy(symbol, quoteAssetAmount, 0, "MARKET")
-	// order, err := client.Buy(symbol, quoteAssetAmount, 0)
-	// if err != nil {
-	// fmt.Println(err)
-	// return
-	// }
-	// qty := util.String2Float(order.ExecutedQty)
-	// fmt.Printf("You bought %s for %v, and got amount:%v\n", symbol, quoteAssetAmount, qty)
-
-	// Sell
-	qty := 0.001
-	total, commission := client.Sell(symbol, 0, qty)
-	fmt.Printf("You sold %s, amount:%v, commission:%v\n", symbol, total, commission)
+	// Buy/Sell
+	// qty := buy(client)
+	// sell(client, qty)
 
 	// client.ExchangeInfo("BTCFDUSD")
 	// client.AccountStatus()
 	// client.Time()
+}
+
+func buy(client *client.Client) float64 {
+	symbol := "BTCFDUSD"
+	quoteAssetAmount := 100.0
+	order, err := client.Buy(symbol, quoteAssetAmount, 0)
+	if err != nil {
+		fmt.Println(err)
+		return 0
+	}
+	qty := util.String2Float(order.ExecutedQty)
+	price := util.String2Float(order.Fills[0].Price)
+	fmt.Printf("bought:%s, price:%v for %v, received amount:%v\n", symbol, price, quoteAssetAmount, qty)
+	return qty
+}
+
+func sell(client *client.Client, qty float64) {
+	symbol := "BTCFDUSD"
+	order, err := client.Sell(symbol, 0, qty)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	exQty := util.String2Float(order.ExecutedQty)
+	price := util.String2Float(order.Fills[0].Price)
+	total := exQty * price
+	commission := util.String2Float(order.Fills[0].Commission)
+	fmt.Printf("sold:%s, price:%v for qty %v received amount %v, total %v (commission:%v)\n", symbol, price, qty, exQty, total, commission)
 }

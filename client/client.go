@@ -3,6 +3,8 @@ package client
 import (
 	"context"
 	"fmt"
+	"os"
+	"regexp"
 	"time"
 
 	binance_connector "github.com/binance/binance-connector-go"
@@ -38,23 +40,20 @@ func NewClient(env string, conn *binance_connector.Client, apiKey, secretKey, ba
 
 // https://binance-docs.github.io/apidocs/spot/en/#new-order-trade
 // symbol-BTCFDUSD, type-MARKET, quantity-0.001, orderType-Market
-func (c Client) Buy(pair string, quoteOrderQuantity, quantity float64) (float64, error) {
+func (c Client) Buy(pair string, quoteOrderQuantity, quantity float64) (*binance_connector.CreateOrderResponseFULL, error) {
 	order, err := c.Order("BUY", pair, quoteOrderQuantity, quantity)
 	if err != nil {
-		fmt.Println(err)
-		return 0, err
+		return nil, err
 	}
-	qty := util.String2Float(order.ExecutedQty)
-	return qty, nil
+	return order, nil
 }
 
-func (c Client) Sell(pair string, quoteOrderQuantity, quantity float64) (float64, float64) {
+func (c Client) Sell(pair string, quoteOrderQuantity, quantity float64) (*binance_connector.CreateOrderResponseFULL, error) {
 	order, err := c.Order("SELL", pair, quoteOrderQuantity, quantity)
 	if err != nil {
-		fmt.Println(err)
-		return 0, 0
+		return nil, err
 	}
-	return util.String2Float(order.ExecutedQty) * util.String2Float(order.Fills[0].Price), util.String2Float(order.Fills[0].Commission)
+	return order, nil
 }
 
 func (c Client) Order(side, pair string, quoteOrderQuantity, quantity float64) (*binance_connector.CreateOrderResponseFULL, error) {
@@ -105,8 +104,34 @@ func (client Client) AccountStatus() {
 // --------------------------------------------------------------------------------
 // System
 
-// https://binance-docs.github.io/apidocs/spot/en/#symbol-price-ticker
+// Test Connectivity
+// https://binance-docs.github.io/apidocs/spot/en/#test-connectivity
+func (c Client) Ping() {
+	err := c.Conn.NewPingService().Do(context.Background())
+	if err != nil {
+		code := regexp.MustCompile(`code=(\d+)`).FindStringSubmatch(err.Error())[1]
+		if code == "0" {
+			fmt.Printf("%s, no connection, quitting\n", c.BaseAPI)
+			os.Exit(0)
+		}
+	}
+	fmt.Printf("%s, connection OK\n", c.BaseAPI)
+}
+
+// Check Server Time
+// https://binance-docs.github.io/apidocs/spot/en/#check-server-time
+func (client Client) Time() {
+	resp := client.Get(c.PATH_TIME, "")
+	fmt.Println("resp:", string(resp))
+
+	var decData entity.TimeResp
+	decode(resp, &decData)
+
+	util.PP(decData)
+}
+
 // Symbol Price Ticker
+// https://binance-docs.github.io/apidocs/spot/en/#symbol-price-ticker
 // GET /api/v3/ticker/price
 func (c Client) SymbolPriceTicker(pair string) {
 	priceTicker, err := c.Conn.
@@ -126,14 +151,6 @@ func (client Client) ExchangeInfo(pair string) {
 	var decData entity.ExchangeInfoRespX
 	decode(resp, &decData)
 	decData.ServerTimeStr = util.Time2String(decData.ServerTime)
-
-	util.PP(decData)
-}
-
-func (client Client) Time() {
-	resp := client.Get(c.PATH_TIME, "")
-	var decData entity.TimeResp
-	decode(resp, &decData)
 
 	util.PP(decData)
 }
