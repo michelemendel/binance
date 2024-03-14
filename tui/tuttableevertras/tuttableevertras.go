@@ -1,13 +1,15 @@
 package tuttableevertras
 
-// This file contains a full demo of most available features, for both testing
-// and for reference
+// https://github.com/Evertras/bubble-table
 
 import (
+	"crypto/rand"
 	"fmt"
 	"log"
+	"math/big"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -26,19 +28,19 @@ const (
 var (
 	customBorder = table.Border{
 		Top:    "─",
-		Left:   "│",
 		Right:  "│",
 		Bottom: "─",
+		Left:   "│",
 
 		TopRight:    "┐",
-		TopLeft:     "┌",
 		BottomRight: "┘",
 		BottomLeft:  "└",
+		TopLeft:     "┌",
 
 		TopJunction:    "┬",
-		LeftJunction:   "├",
 		RightJunction:  "┤",
 		BottomJunction: "┴",
+		LeftJunction:   "├",
 		InnerJunction:  "┼",
 		InnerDivider:   "│",
 	}
@@ -53,7 +55,7 @@ func Run() {
 	}
 	defer f.Close()
 	//
-	p := tea.NewProgram(NewModel(initData()))
+	p := tea.NewProgram(NewModel())
 	_, err = p.Run()
 	if err != nil {
 		log.Fatal(err)
@@ -62,7 +64,7 @@ func Run() {
 
 type Model struct {
 	Table           table.Model
-	Rows            []Row
+	Rows            []*Row
 	SortKey         string
 	CurrSortKey     string //To be able to start with ASC for any new selected column.
 	SortDirection   string
@@ -97,17 +99,7 @@ func MakeTableRow(id, name, description string, count float64) table.Row {
 	})
 }
 
-func initData() []Row {
-	return []Row{
-		{"100", "Carl", "The head of the organization", 9000},
-		{"123", "Abe", "Good with all weapons", 170},
-		{"398", "Dave", "Drives and flies any vehicle or plane", -170},
-		{"093", "Eve", "Cooks the most effective explosives", -200},
-		{"007", "Fiona", "Can open any lock", 445},
-	}
-}
-
-func NewModel(items []Row) Model {
+func NewModel() Model {
 	columns := []table.Column{
 		table.NewColumn(keyID, "(I)D", 5).WithFiltered(true),
 		table.NewColumn(keyName, "(N)ame", 10).WithFiltered(true),
@@ -115,10 +107,10 @@ func NewModel(items []Row) Model {
 		table.NewColumn(keyCount, "(M)oney", 10).WithStyle(lipgloss.NewStyle().Align(lipgloss.Right)).WithFiltered(true),
 	}
 
-	rows := []table.Row{}
-	for _, r := range items {
-		rows = append(rows, MakeTableRow(r.id, r.name, r.description, r.count))
-	}
+	// rows := []table.Row{}
+	// for _, r := range items {
+	// 	rows = append(rows, MakeTableRow(r.id, r.name, r.description, r.count))
+	// }
 
 	// Start with the default key map and change it slightly, just for demoing
 	keys := table.DefaultKeyMap()
@@ -126,12 +118,10 @@ func NewModel(items []Row) Model {
 	keys.RowUp.SetKeys("k", "up", "w")
 
 	model := Model{
-		// Throw features in... the point is not to look good, it's just reference!
 		Table: table.
 			New(columns).
 			Filtered(true).
 			Focused(true).
-			WithRows(rows).
 			WithPageSize(60).
 			HeaderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("#0000aa")).Bold(true)).
 			SelectableRows(true).
@@ -146,7 +136,6 @@ func NewModel(items []Row) Model {
 					Align(lipgloss.Left),
 			).
 			SortByAsc(keyID),
-		Rows:            items,
 		CurrSortKey:     keyID,
 		SortKey:         keyID,
 		SortDirection:   "asc",
@@ -159,26 +148,7 @@ func NewModel(items []Row) Model {
 }
 
 func (m Model) Init() tea.Cmd {
-	return nil
-}
-
-func totalCount(rows []Row) float64 {
-	total := 0.0
-	for _, r := range rows {
-		total += r.count
-	}
-	return total
-}
-
-func (m *Model) updateFooter() {
-	footerText := fmt.Sprintf(
-		"%d/%d    total: %.2f",
-		m.Table.CurrentPage(),
-		m.Table.MaxPages(),
-		totalCount(m.Rows),
-	)
-
-	m.Table = m.Table.WithStaticFooter(footerText)
+	return initDataCmd
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -187,6 +157,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	doSort := false
 
 	switch msg := msg.(type) {
+	case []*Row: //New data has presented itself
+		m.Rows = msg
+		rows := []table.Row{}
+		for _, r := range m.Rows {
+			rows = append(rows, MakeTableRow(r.id, r.name, r.description, r.count))
+		}
+		m.updateFooter()
+		m.Table = m.Table.WithRows(rows)
+		cmds = append(cmds, m.updateDataCmd)
 	case tea.KeyMsg:
 		if m.FilterTextInput.Focused() {
 			if msg.String() == "enter" || msg.String() == "esc" {
@@ -195,10 +174,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.FilterTextInput, _ = m.FilterTextInput.Update(msg)
 			}
 			m.Table = m.Table.WithFilterInput(m.FilterTextInput)
-
-			return m, tea.Batch(cmds...)
 		}
-
 		//
 		switch msg.String() {
 		case "ctrl+c", "q":
@@ -224,21 +200,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, cmd)
 			m.updateFooter()
 		}
-
 		if doSort {
-			if m.SortKey == m.CurrSortKey {
-				if m.SortDirection == "asc" {
-					m.Table = m.Table.SortByAsc(m.SortKey)
-					m.SortDirection = "desc"
-				} else {
-					m.Table = m.Table.SortByDesc(m.SortKey)
-					m.SortDirection = "asc"
-				}
-			} else {
-				m.Table = m.Table.SortByAsc(m.SortKey)
-				m.SortDirection = "desc"
-			}
-			m.CurrSortKey = m.SortKey
+			SortTable(&m)
 			doSort = false
 		}
 	}
@@ -262,9 +225,78 @@ func (m Model) View() string {
 		selectedIDs = append(selectedIDs, row.Data[keyID].(string))
 	}
 
+	body.WriteString(m.Table.View() + "\n")
 	body.WriteString(m.FilterTextInput.View() + "\n")
-	body.WriteString(m.Table.View())
 	body.WriteString(fmt.Sprintf("\nSelectedIDs: %s\n\n", strings.Join(selectedIDs, ", ")))
 
 	return body.String()
+}
+
+//--------------------------------------------------------------------------------
+// Data
+
+func initDataCmd() tea.Msg {
+	return []*Row{
+		{"100", "Carl", "The head of the organization", 9000},
+		{"123", "Abe", "Good with all weapons", 170},
+		{"398", "Dave", "Drives and flies any vehicle or plane", -170},
+		{"093", "Eve", "Cooks the most effective explosives", -200},
+		{"007", "Fiona", "Can open any lock", 445},
+	}
+}
+
+func (m *Model) updateDataCmd() tea.Msg {
+	sign := []float64{1, -1}
+	randSignInt, _ := rand.Int(rand.Reader, big.NewInt(2))
+	randSign := sign[randSignInt.Uint64()]
+
+	amount := []float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+	randAmountInt, _ := rand.Int(rand.Reader, big.NewInt(int64(len(amount))))
+	randAmount := amount[randAmountInt.Uint64()]
+
+	nofRows := int64(len(m.Rows))
+	randRow, _ := rand.Int(rand.Reader, big.NewInt(nofRows))
+
+	m.Rows[randRow.Uint64()].count += randAmount * randSign
+
+	time.Sleep(100 * time.Millisecond)
+	return m.Rows
+}
+
+//--------------------------------------------------------------------------------
+// Helper functions
+
+func SortTable(m *Model) {
+	if m.SortKey == m.CurrSortKey {
+		if m.SortDirection == "asc" {
+			m.Table = m.Table.SortByAsc(m.SortKey)
+			m.SortDirection = "desc"
+		} else {
+			m.Table = m.Table.SortByDesc(m.SortKey)
+			m.SortDirection = "asc"
+		}
+	} else {
+		m.Table = m.Table.SortByAsc(m.SortKey)
+		m.SortDirection = "desc"
+	}
+	m.CurrSortKey = m.SortKey
+}
+
+func (m *Model) updateFooter() {
+	footerText := fmt.Sprintf(
+		"%d/%d    total: %.2f",
+		m.Table.CurrentPage(),
+		m.Table.MaxPages(),
+		totalCount(m.Rows),
+	)
+
+	m.Table = m.Table.WithStaticFooter(footerText)
+}
+
+func totalCount(rows []*Row) float64 {
+	total := 0.0
+	for _, r := range rows {
+		total += r.count
+	}
+	return total
 }
