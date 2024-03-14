@@ -1,8 +1,8 @@
 build_client:
 	@go build -o bin/client cmd/client/main.go
 
-# client_prod: build_client
-	# @ENV=prod ./bin/client
+client_prod: build_client
+	@ENV=prod ./bin/client
 
 client_test: build_client
 	@ENV=test ./bin/client
